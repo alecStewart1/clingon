@@ -411,6 +411,21 @@
 (defmethod make-option ((kind (eql :counter)) &rest rest)
   (apply #'make-instance 'option-counter rest))
 
+(defmethod initialize-option ((option option-counter) &key)
+  ;; Set things up
+  (call-next-method)
+
+  ;; Nothing to be done further
+  (unless (option-value option)
+    (return-from initialize-option))
+
+  ;; Derive a new value based on the already set initialized value
+  (let ((current (option-value option)))
+    (setf (option-value option)
+          (if (stringp current)
+              (parse-integer current)
+              current))))
+
 (defmethod derive-option-value ((option option-counter) arg &key)
   (declare (ignore arg))
   (+ (option-value option) (option-counter-step option)))
