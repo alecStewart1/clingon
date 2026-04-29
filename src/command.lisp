@@ -1049,27 +1049,33 @@ _~~A() {
   (let ((opts (visible-options command)))
     (unless opts
       (return-from print-options-usage))
-    (let* ((usages (mapcar (lambda (o) (option-usage-details :default o)) opts))
-           (width (+ 4 (apply #'max (mapcar #'length usages))))
-           (opt-groups (group-by opts #'option-category))
-           (group-names (sort (hashtable-keys opt-groups) #'string<)))
-      (loop :for group-name :in group-names
-            :for group-opts = (gethash group-name opt-groups)
-            :for sorted-opts = (sort group-opts
-                                     #'string<
-                                     :key (lambda (o) (option-usage-details :default o)))
-            :do
-               ;; Special case for the default option category/group
-               (when (string/= group-name "")
-                 (format stream "~%~A:~&" group-name))
-               (loop :for opt :in sorted-opts :do
-                 (let* ((usage (option-usage-details :default opt))
-                        (desc (option-description-details :default opt))
-                        (lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
-                   (format stream "  ~A" (option-usage-details :default opt))
-                   (format stream "~vA~A~&" (- width (length usage) 2) #\Space (first lines))
-                   (dolist (remaining (rest lines))
-                     (format stream "~vA~A~&" width #\Space remaining)))))))
+    (let ((width 0)
+          (opt-groups (make-hash-table :test #'equal)))
+      ;; Single pass: compute usage strings, max width, and group by category
+      (dolist (opt opts)
+        (let* ((usage (option-usage-details :default opt))
+               (len (length usage))
+               (category (option-category opt)))
+          (when (> len width)
+            (setf width len))
+          (push (cons opt usage) (gethash category opt-groups nil))))
+      (setf width (+ 4 width))
+      ;; Sort and print groups
+      (let ((group-names (sort (hashtable-keys opt-groups) #'string<)))
+        (loop :for group-name :in group-names
+              :for group-entries = (sort (gethash group-name opt-groups)
+                                         #'string< :key #'cdr)
+              :do
+                 ;; Special case for the default option category/group
+                 (when (string/= group-name "")
+                   (format stream "~%~A:~&" group-name))
+                 (loop :for (opt . usage) :in group-entries :do
+                   (let* ((desc (option-description-details :default opt))
+                          (lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
+                     (format stream "  ~A" usage)
+                     (format stream "~vA~A~&" (- width (length usage) 2) #\Space (first lines))
+                     (dolist (remaining (rest lines))
+                       (format stream "~vA~A~&" width #\Space remaining))))))))
   (format stream "~%"))
 
 (defmethod print-sub-commands-info ((command command) stream &key (wrap-at-width 70))
