@@ -78,16 +78,16 @@
 (deftest initialize-command
   (testing "ensure command arguments are nil"
     (let ((c (clingon:make-command :name "foo"
-                                   :description "foo command"
-                                   :arguments '(1 2 3))))
+                                   :description "foo command")))
+      (setf (clingon:command-arguments c) '(1 2 3))
       (clingon:initialize-command c)
       (ok (equal (clingon:command-arguments c) nil) "free arguments are nil upon initialization"))))
 
 (deftest finalize-command
   (testing "args to parse are nil"
     (let ((c (clingon:make-command :name "foo"
-                                   :description "foo command"
-                                   :arguments '(1 2 3))))
+                                   :description "foo command")))
+      (setf (clingon:command-arguments c) '(1 2 3))
       (clingon:initialize-command c)
       (clingon:finalize-command c)
       (ok (equal (clingon.command:command-args-to-parse c) nil) "no more args to parse"))))
@@ -625,3 +625,113 @@
         (clingon:initialize-command child)
         (ok (= count-1 (length (clingon:command-options child)))
             "option count is the same after repeated initialization")))))
+
+(deftest named-positional-arguments
+  (testing "basic positional argument assignment"
+    (let* ((cmd (clingon:make-command
+                 :name "copy"
+                 :description "copy files"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "source" :description "source file" :key :source :required t)
+                             (clingon:make-argument :name "dest" :description "destination" :key :dest :required t)))))
+      (let ((c (clingon:parse-command-line cmd '("foo.txt" "bar.txt"))))
+        (ok (string= "foo.txt" (clingon:getopt c :source)) "source matches")
+        (ok (string= "bar.txt" (clingon:getopt c :dest)) "dest matches")
+        (ok (null (clingon:command-arguments c)) "no extra free arguments"))))
+
+  (testing "extra args beyond positionals go to command-arguments"
+    (let* ((cmd (clingon:make-command
+                 :name "copy"
+                 :description "copy files"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "source" :description "source file" :key :source :required t)))))
+      (let ((c (clingon:parse-command-line cmd '("foo.txt" "extra1" "extra2"))))
+        (ok (string= "foo.txt" (clingon:getopt c :source)) "source matches")
+        (ok (equal '("extra1" "extra2") (clingon:command-arguments c)) "extra args collected"))))
+
+  (testing "optional positional with default value"
+    (let* ((cmd (clingon:make-command
+                 :name "greet"
+                 :description "greet someone"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "name" :description "person name" :key :name :initial-value "world")))))
+      (let ((c (clingon:parse-command-line cmd '())))
+        (ok (string= "world" (clingon:getopt c :name)) "default value used"))
+      (let ((c (clingon:parse-command-line cmd '("Alice"))))
+        (ok (string= "Alice" (clingon:getopt c :name)) "provided value used"))))
+
+  (testing "required positional missing signals error"
+    (let* ((cmd (clingon:make-command
+                 :name "copy"
+                 :description "copy files"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "source" :description "source file" :key :source :required t)
+                             (clingon:make-argument :name "dest" :description "destination" :key :dest :required t)))))
+      (ok (signals (clingon:parse-command-line cmd '("foo.txt")) 'clingon:missing-required-argument)
+          "signals when required positional is missing")))
+
+  (testing "positionals with options"
+    (let* ((cmd (clingon:make-command
+                 :name "app"
+                 :description "app"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :options (list
+                           (clingon:make-option :flag :long-name "verbose" :key :verbose :description "verbose"))
+                 :arguments (list
+                             (clingon:make-argument :name "file" :description "input file" :key :file :required t)))))
+      (let ((c (clingon:parse-command-line cmd '("--verbose" "input.txt"))))
+        (ok (clingon:getopt c :verbose) "option is set")
+        (ok (string= "input.txt" (clingon:getopt c :file)) "positional assigned after option"))))
+
+  (testing "sub-commands take priority over positionals"
+    (let* ((sub (clingon:make-command :name "status" :description "show status"
+                                     :handler (lambda (c) (declare (ignore c)))))
+           (cmd (clingon:make-command
+                 :name "app"
+                 :description "app"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :sub-commands (list sub)
+                 :arguments (list
+                             (clingon:make-argument :name "target" :description "target" :key :target)))))
+      (let ((c (clingon:parse-command-line cmd '("status"))))
+        (ok (string= "status" (clingon:command-name c)) "sub-command matched, not positional"))))
+
+  (testing "usage string includes positional names"
+    (let* ((cmd (clingon:make-command
+                 :name "copy"
+                 :description "copy files"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "source" :description "source file" :key :source :required t)
+                             (clingon:make-argument :name "dest" :description "destination" :key :dest)))))
+      (let ((usage (clingon:command-usage-string cmd)))
+        (ok (search "<source>" usage) "required positional shown with angle brackets")
+        (ok (search "[<dest>]" usage) "optional positional shown with square brackets"))))
+
+  (testing "help output includes ARGUMENTS section"
+    (let* ((cmd (clingon:make-command
+                 :name "copy"
+                 :description "copy files"
+                 :handler (lambda (c) (declare (ignore c)))
+                 :arguments (list
+                             (clingon:make-argument :name "source" :description "source file" :key :source :required t)))))
+      (let ((output (with-output-to-string (s)
+                      (clingon:print-usage cmd s))))
+        (ok (search "ARGUMENTS:" output) "ARGUMENTS section present")
+        (ok (search "source" output) "argument name shown")
+        (ok (search "source file" output) "argument description shown"))))
+
+  (testing "argument key collision with option key signals error"
+    (ok (signals
+         (clingon:make-command
+          :name "app"
+          :description "app"
+          :handler (lambda (c) (declare (ignore c)))
+          :options (list (clingon:make-option :string :long-name "file" :description "file" :key :file))
+          :arguments (list (clingon:make-argument :name "file" :description "input file" :key :file)))
+         'error)
+        "signals on argument/option key collision")))
