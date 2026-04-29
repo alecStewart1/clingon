@@ -739,7 +739,7 @@ _~~A() {
           (setf optarg (subseq arg (1+ equals-position))) ;; --arg=foo
           (setf optarg (pop (command-args-to-parse command)))) ;; --arg foo
       ;; Handle missing argument for the option
-      (when (or (string= optarg "") (null optarg))
+      (when (null optarg)
         (setf optarg (handle-missing-argument-with-restarts command option))
         (unless optarg
           (return-from parse-option))))
