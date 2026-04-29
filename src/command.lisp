@@ -369,6 +369,10 @@ _~~A() {
     :initform (make-hash-table)
     :accessor command-key-options-lookup
     :documentation "Hash table mapping option keys to options")
+   (sub-commands-lookup
+    :initform (make-hash-table :test #'equal)
+    :accessor command-sub-commands-lookup
+    :documentation "Hash table mapping sub-command names and aliases to sub-commands")
    (handler
     :initarg :handler
     :initform nil
@@ -491,6 +495,13 @@ _~~A() {
   ;; Configure the parent for any of the sub-commands.
   (dolist (sub (command-sub-commands command))
     (setf (command-parent sub) command))
+
+  ;; Build sub-command lookup table
+  (let ((table (command-sub-commands-lookup command)))
+    (dolist (sub (command-sub-commands command))
+      (setf (gethash (command-name sub) table) sub)
+      (dolist (alias (command-aliases sub))
+        (setf (gethash alias table) sub))))
 
   ;; Add default options to each command
   (dolist (default-opt (make-default-options))
@@ -653,10 +664,7 @@ _~~A() {
 
 (defmethod find-sub-command ((command command) name)
   "Returns the sub-command with the given name or alias"
-  (find-if (lambda (sub-command)
-             (or (string= name (command-name sub-command))
-                 (member name (command-aliases sub-command) :test #'string=)))
-           (command-sub-commands command)))
+  (gethash name (command-sub-commands-lookup command)))
 
 (defmethod command-full-path ((command command))
   "Returns the full path to the command"
