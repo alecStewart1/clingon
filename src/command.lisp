@@ -48,7 +48,10 @@
    :option-derive-error-p
    :base-error
    :exit-error
-   :exit-error-code)
+   :exit-error-code
+   :missing-required-argument
+   :missing-required-argument-item
+   :missing-required-argument-command)
   (:import-from
    :clingon.options
    :option
@@ -71,7 +74,16 @@
    :finalize-option
    :derive-option-value
    :option-usage-details
-   :option-description-details)
+   :option-description-details
+   :argument
+   :argument-name
+   :argument-description
+   :argument-key
+   :argument-required-p
+   :argument-initial-value
+   :argument-value
+   :argument-is-set-p
+   :make-argument)
   (:import-from
    :clingon.utils
    :argv
@@ -127,8 +139,10 @@
    :print-version-and-exit
    :print-documentation
    :print-options-usage
+   :print-arguments-info
    :print-sub-commands-info
    :command-usage-string
+   :command-named-arguments
    :visible-options
    :persistent-options
    :inherited-options
@@ -136,7 +150,19 @@
    :make-default-help-flag
    :make-default-version-flag
    :make-default-bash-completions-flag
-   :make-default-options))
+   :make-default-options
+   :make-argument
+   :argument
+   :argument-name
+   :argument-description
+   :argument-key
+   :argument-required-p
+   :argument-initial-value
+   :argument-value
+   :argument-is-set-p
+   :missing-required-argument
+   :missing-required-argument-item
+   :missing-required-argument-command))
 (in-package :clingon.command)
 
 (defgeneric handle-error (condition)
@@ -240,6 +266,10 @@ not found, or not set."))
 (defgeneric print-options-usage (command stream &key)
   (:documentation "Prints the usage information about options to the
   given stream"))
+
+(defgeneric print-arguments-info (command stream)
+  (:documentation "Prints the usage information about named positional
+  arguments to the given stream"))
 
 (defgeneric print-sub-commands-info (command stream &key)
   (:documentation "Prints a summary of the sub-commands available for
@@ -364,10 +394,14 @@ _~~A() {
     :accessor command-args-to-parse
     :documentation "Arguments to be parsed based on the command options")
    (arguments
-    :initarg :arguments
     :initform nil
     :accessor command-arguments
     :documentation "Discovered free arguments after parsing the options")
+   (named-arguments
+    :initarg :arguments
+    :initform nil
+    :reader command-named-arguments
+    :documentation "List of named positional argument definitions")
    (context
     :initarg :context
     :initform (make-hash-table :test #'equal)
@@ -437,13 +471,25 @@ _~~A() {
 
   ;; Save the initial options list for resetting on re-initialization
   (setf (command-initial-options command)
-        (copy-list (command-options command))))
+        (copy-list (command-options command)))
+
+  ;; Validate that named argument keys don't collide with option keys
+  (let ((option-keys (mapcar #'option-key (command-options command))))
+    (dolist (arg (command-named-arguments command))
+      (when (member (argument-key arg) option-keys)
+        (error "Argument key ~A conflicts with an option key in command '~A'"
+               (argument-key arg) (command-name command))))))
 
 (defmethod initialize-command ((command command))
   "Initializes the command and the options associated with it."
   ;; Re-initialize context and arguments
   (setf (command-context command) (make-hash-table :test #'equal))
   (setf (command-arguments command) nil)
+
+  ;; Reset named arguments
+  (dolist (arg (command-named-arguments command))
+    (setf (argument-value arg) nil)
+    (setf (argument-is-set-p arg) nil))
 
   ;; Reset options to the initial set to prevent accumulation on repeated calls
   (setf (command-options command)
@@ -500,7 +546,18 @@ _~~A() {
   (let ((required-options (remove-if-not #'option-required-p (command-options command))))
     (dolist (option required-options)
       (unless (option-is-set-p option)
-        (error 'missing-required-option-value :item option :command command)))))
+        (error 'missing-required-option-value :item option :command command))))
+
+  ;; Finalize named arguments
+  (let ((context (command-context command)))
+    (dolist (arg (command-named-arguments command))
+      (cond
+        ((argument-is-set-p arg)
+         (setf (gethash (argument-key arg) context) (argument-value arg)))
+        ((argument-initial-value arg)
+         (setf (gethash (argument-key arg) context) (argument-initial-value arg)))
+        ((argument-required-p arg)
+         (error 'missing-required-argument :item arg :command command))))))
 
 (defmethod find-option ((kind (eql :short)) (command command) name)
   "Finds the option with the given short name"
@@ -601,13 +658,25 @@ _~~A() {
 (defmethod parse-option ((kind (eql :consume-all-arguments)) (command command))
   "Consumes all arguments after the end-of-options flag"
   (pop (command-args-to-parse command)) ;; Drop the end-of-options (`--') argument
-  (loop :for arg = (pop (command-args-to-parse command)) :while arg :do
-    (push arg (command-arguments command))))
+  (let ((named-args (command-named-arguments command)))
+    (loop :for arg = (pop (command-args-to-parse command)) :while arg :do
+      (let ((next-named (find-if-not #'argument-is-set-p named-args)))
+        (if next-named
+            (progn
+              (setf (argument-value next-named) arg)
+              (setf (argument-is-set-p next-named) t))
+            (push arg (command-arguments command)))))))
 
 (defmethod parse-option ((kind (eql :free-argument)) (command command))
-  "Consume the option and treat it as a free argument"
-  (let ((arg (pop (command-args-to-parse command))))
-    (push arg (command-arguments command))))
+  "Consume the argument and assign to next named positional, or treat as free argument"
+  (let* ((arg (pop (command-args-to-parse command)))
+         (named-args (command-named-arguments command))
+         (next-arg (find-if-not #'argument-is-set-p named-args)))
+    (if next-arg
+        (progn
+          (setf (argument-value next-arg) arg)
+          (setf (argument-is-set-p next-arg) t))
+        (push arg (command-arguments command)))))
 
 (defmethod handle-unknown-option-with-restarts ((command command) kind full-name)
   "Provides possible restarts when an unknown option is detected"
@@ -777,6 +846,14 @@ _~~A() {
             (failed-cmd (missing-required-option-value-command condition)))
         (format *error-output* "~&Required option ~A not set.~%See '~A --help' for more details.~&"
                 (string-trim #(#\Space) (option-usage-details :default option))
+                (command-full-name failed-cmd))
+        (exit 64))) ;; EX_USAGE
+    ;; Missing required positional arguments
+    (missing-required-argument (condition)
+      (let ((arg (missing-required-argument-item condition))
+            (failed-cmd (missing-required-argument-command condition)))
+        (format *error-output* "~&Required argument '~A' not provided.~%See '~A --help' for more details.~&"
+                (argument-name arg)
                 (command-full-name failed-cmd))
         (exit 64))) ;; EX_USAGE
     ;; Missing argument for an option
@@ -1014,32 +1091,62 @@ _~~A() {
             (format stream "~vA~A~&" width #\Space remaining))))))
   (format stream "~%"))
 
+(defun named-arguments-usage-string (command)
+  "Returns a string representing named arguments for the usage line"
+  (let ((named-args (command-named-arguments command)))
+    (if named-args
+        (with-output-to-string (s)
+          (dolist (arg named-args)
+            (if (argument-required-p arg)
+                (format s " <~A>" (argument-name arg))
+                (format s " [<~A>]" (argument-name arg)))))
+        "")))
+
+(defmethod print-arguments-info ((command command) stream)
+  "Prints the usage information about named positional arguments"
+  (let* ((named-args (command-named-arguments command))
+         (names (mapcar #'argument-name named-args))
+         (width (+ 4 (apply #'max (mapcar #'length names)))))
+    (dolist (arg named-args)
+      (let ((name (argument-name arg))
+            (desc (argument-description arg)))
+        (format stream "  ~A" name)
+        (format stream "~vA~A" (- width (length name) 2) #\Space desc)
+        (when (argument-required-p arg)
+          (format stream " (required)"))
+        (format stream "~%"))))
+  (format stream "~%"))
+
 (defmethod command-usage-string ((command command))
   "Returns the usage string for the given command"
   (let ((prev-cmd-name (and (command-parent command)
-                            (command-full-name (second (command-lineage command))))))
+                            (command-full-name (second (command-lineage command)))))
+        (args-usage (named-arguments-usage-string command)))
     (cond
       ;; The command provides it's own usage info
       ((command-usage command)
        (format nil "~A ~A" (command-full-name command) (command-usage command)))
       ;; The command provides sub-commands and has a parent
       ((and (command-sub-commands command) (command-parent command))
-       (format nil "~A [global-options] ~A [<command>] [command-options] [arguments ...]"
+       (format nil "~A [global-options] ~A [<command>] [command-options]~A [arguments ...]"
                prev-cmd-name
-               (command-name command)))
+               (command-name command)
+               args-usage))
       ;; The command provides sub-commands and is a top-level command
       ((and (command-sub-commands command) (command-is-top-level-p command))
-       (format nil "~A [global-options] [<command>] [command-options] [arguments ...]"
-               (command-full-name command)))
+       (format nil "~A [global-options] [<command>] [command-options]~A [arguments ...]"
+               (command-full-name command)
+               args-usage))
       ;; The command is a sub-command of another command
       ((command-parent command)
-       (format nil "~A [global-options] ~A [options] [arguments ...]"
+       (format nil "~A [global-options] ~A [options]~A [arguments ...]"
                ;; Print the path leading up to the command itself
                prev-cmd-name
-               (command-name command)))
+               (command-name command)
+               args-usage))
       ;; Default usage info
       (t
-       (format nil "~A [options] [arguments ...]" (command-full-name command))))))
+       (format nil "~A [options]~A [arguments ...]" (command-full-name command) args-usage)))))
 
 (defmethod print-usage ((command command) stream &key (wrap-at 70))
   (initialize-command command)
@@ -1059,6 +1166,10 @@ _~~A() {
   (when (command-options command)
     (format stream "OPTIONS:~%")
     (print-options-usage command stream))
+
+  (when (command-named-arguments command)
+    (format stream "ARGUMENTS:~%")
+    (print-arguments-info command stream))
 
   (when (command-sub-commands command)
     (format stream "COMMANDS:~%")

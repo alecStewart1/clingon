@@ -54,7 +54,10 @@
    :option-derive-error-p
    :base-error
    :exit-error
-   :exit-error-code))
+   :exit-error-code
+   :missing-required-argument
+   :missing-required-argument-item
+   :missing-required-argument-command))
 (in-package :clingon.conditions)
 
 (define-condition option-derive-error (simple-error)
@@ -191,3 +194,19 @@
     :reader exit-error-code
     :documentation "The exit code to be returned to the operating system"))
   (:documentation "A condition representing an error with associated exit code"))
+
+(define-condition missing-required-argument (simple-error)
+  ((item
+    :initarg :item
+    :initform (error "Must specify argument item")
+    :reader missing-required-argument-item
+    :documentation "The argument which requires a value")
+   (command
+    :initarg :command
+    :initform (error "Must specify command")
+    :reader missing-required-argument-command
+    :documentation "The command to which the argument is associated"))
+  (:report (lambda (condition stream)
+             (format stream "Required argument ~A not provided"
+                     (slot-value (missing-required-argument-item condition) 'name))))
+  (:documentation "A condition which is signalled when a required positional argument was not provided"))

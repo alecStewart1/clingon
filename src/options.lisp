@@ -80,7 +80,16 @@
    :option-switch-off-states
    :option-filepath
    :option-list-filepath
-   :parse-integer-or-lose))
+   :parse-integer-or-lose
+   :argument
+   :argument-name
+   :argument-description
+   :argument-key
+   :argument-required-p
+   :argument-initial-value
+   :argument-value
+   :argument-is-set-p
+   :make-argument))
 (in-package :clingon.options)
 
 (defgeneric initialize-option (option &key)
@@ -716,3 +725,57 @@
 
 (defmethod make-option ((kind (eql :switch)) &rest rest)
   (apply #'make-instance 'option-switch rest))
+
+;;;;
+;;;; Named positional arguments
+;;;;
+
+(defclass argument ()
+  ((name
+    :initarg :name
+    :initform (error "Must specify argument name")
+    :reader argument-name
+    :documentation "The name of the positional argument")
+   (description
+    :initarg :description
+    :initform (error "Must specify argument description")
+    :reader argument-description
+    :documentation "Short description of the argument")
+   (key
+    :initarg :key
+    :initform (error "Must specify argument key")
+    :reader argument-key
+    :documentation "Key used to store the argument value in the command context")
+   (required
+    :initarg :required
+    :initform nil
+    :reader argument-required-p
+    :documentation "Whether this argument is required")
+   (initial-value
+    :initarg :initial-value
+    :initform nil
+    :reader argument-initial-value
+    :documentation "Default value if the argument is not provided")
+   (value
+    :initform nil
+    :accessor argument-value
+    :documentation "The assigned value after parsing")
+   (is-set-p
+    :initform nil
+    :accessor argument-is-set-p
+    :documentation "Whether this argument was set during parsing"))
+  (:documentation "A class representing a named positional argument"))
+
+(defmethod initialize-instance :after ((argument argument) &key)
+  (unless (keywordp (argument-key argument))
+    (error "Argument key must be a keyword, got ~A" (argument-key argument)))
+  (when (and (argument-required-p argument) (argument-initial-value argument))
+    (error "Required argument cannot have an initial value")))
+
+(defmethod print-object ((argument argument) stream)
+  (print-unreadable-object (argument stream :type t)
+    (format stream "name=~A key=~A" (argument-name argument) (argument-key argument))))
+
+(defun make-argument (&rest rest)
+  "Creates a new ARGUMENT instance"
+  (apply #'make-instance 'argument rest))
