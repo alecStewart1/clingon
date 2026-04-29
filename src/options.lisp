@@ -341,6 +341,18 @@
 (defmethod make-option ((kind (eql :boolean)) &rest rest)
   (apply #'make-instance 'option-boolean rest))
 
+(defmethod initialize-option ((option option-boolean) &key)
+  ;; Set things up
+  (call-next-method)
+
+  ;; Nothing to be done further
+  (unless (option-value option)
+    (return-from initialize-option))
+
+  ;; Derive a new value based on the already set initialized value
+  (let ((current (option-value option)))
+    (setf (option-value option) (derive-option-value option current))))
+
 (defmethod derive-option-value ((option option-boolean) arg &key)
   (let ((arg (string-downcase arg)))
     (cond
