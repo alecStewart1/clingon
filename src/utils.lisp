@@ -45,20 +45,22 @@
   The ORDER should be either :dfs or :bfs for Depth-First Search or
   Breadth-First Search respectively."
   (let ((to-visit (list root))
-        (visited nil))
+        (visited (make-hash-table :test #'equal))
+        (result nil))
     (loop :while to-visit
           :for node = (pop to-visit)
           :for neighbors = (copy-list (funcall neighbors-func node))
           :for not-seen = (remove-if (lambda (x)
-                                       (member x visited :test #'equal))
+                                       (gethash x visited))
                                      neighbors)
           :do
              (ecase order
                (:bfs (setf to-visit (nconc to-visit not-seen)))
                (:dfs (setf to-visit (nconc not-seen to-visit))))
-             (unless (member node visited :test #'equal)
-               (push node visited)))
-    (nreverse visited)))
+             (unless (gethash node visited)
+               (setf (gethash node visited) t)
+               (push node result)))
+    (nreverse result)))
 
 (defun argv ()
   "Returns the list of command-line arguments"
