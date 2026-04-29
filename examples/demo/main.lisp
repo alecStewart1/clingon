@@ -57,6 +57,7 @@
    (math/command)
    (echo/command)
    (engine/command)
+   (copy/command)
    (print-doc/command)
    (sleep/command)
    (zsh-completion/command)

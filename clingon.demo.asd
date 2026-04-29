@@ -48,6 +48,7 @@
                              (:file "math")
                              (:file "echo")
                              (:file "engine")
+                             (:file "copy")
                              (:file "print-doc")
                              (:file "sleep")
                              (:file "zsh-completion")
