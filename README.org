@@ -20,6 +20,7 @@ A summary of the features supported by =clingon= is provided below.
   commands
 - Support for options, which may be required
 - Options can be initialized via environment variables
+- Support for named positional arguments
 - Single interface for creating options using =CLINGON:MAKE-OPTION=
 - Generate documentation for your command-line app
 - Support for =pre-hook= and =post-hook= actions for commands, which
@@ -108,6 +109,68 @@ anyway you prefer.
 
 You can find additional examples included in the test suite for
 =clingon=.
+
+* Named Positional Arguments
+
+=clingon= supports named positional arguments, which allow you to
+define named positions for free arguments and access them via
+=CLINGON:GETOPT=, rather than manually indexing into
+=CLINGON:COMMAND-ARGUMENTS=.
+
+#+begin_src lisp
+(defun copy/handler (cmd)
+  "Handler for the `copy' command"
+  (let ((source (clingon:getopt cmd :source))
+        (dest (clingon:getopt cmd :dest))
+        (force (clingon:getopt cmd :force)))
+    (format t "Copying ~A -> ~A (force: ~A)~%" source dest force)))
+
+(defun copy/command ()
+  "A command which demonstrates named positional arguments"
+  (clingon:make-command
+   :name "copy"
+   :description "copy a file to a destination"
+   :handler #'copy/handler
+   :options (list
+             (clingon:make-option :flag
+                                  :short-name #\f
+                                  :long-name "force"
+                                  :description "overwrite destination"
+                                  :key :force))
+   :arguments (list
+               (clingon:make-argument :name "source"
+                                      :description "source file to copy"
+                                      :key :source
+                                      :required t)
+               (clingon:make-argument :name "dest"
+                                      :description "destination path"
+                                      :key :dest
+                                      :required t))))
+#+end_src
+
+When users invoke the command, positional arguments are assigned in
+order:
+
+#+begin_src shell
+$ copy --force foo.txt bar.txt
+Copying foo.txt -> bar.txt (force: T)
+#+end_src
+
+Positional arguments can be required or optional. Optional arguments
+support default values via =:initial-value=. Any extra arguments
+beyond the defined positionals are collected in
+=CLINGON:COMMAND-ARGUMENTS= as before.
+
+The generated help output will include an =ARGUMENTS= section:
+
+#+begin_src text
+USAGE:
+  copy [options] <source> <dest> [arguments ...]
+
+ARGUMENTS:
+  source  source file to copy (required)
+  dest    destination path (required)
+#+end_src
 
 * Demo
 
