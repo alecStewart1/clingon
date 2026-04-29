@@ -430,3 +430,63 @@
                                     :initial-value "INVALID")))
       (ok (signals (clingon:initialize-option opt) 'clingon:option-derive-error)
           "signals on invalid default value"))))
+
+(deftest option-env-var-initialization
+  (testing "boolean option initialized from environment variable"
+    (let ((opt (clingon:make-option :boolean
+                                    :long-name "flag"
+                                    :description "a flag"
+                                    :key :flag
+                                    :env-vars '("TEST_BOOL_FLAG"))))
+      (setf (uiop:getenv "TEST_BOOL_FLAG") "true")
+      (unwind-protect
+           (progn
+             (clingon:initialize-option opt)
+             (ok (equal :true (clingon:option-value opt)) "env var 'true' derives to :true")
+             (ok (equal t (clingon:finalize-option opt)) "finalizes to T without error"))
+        (setf (uiop:getenv "TEST_BOOL_FLAG") ""))))
+
+  (testing "boolean option with env var set to false"
+    (let ((opt (clingon:make-option :boolean
+                                    :long-name "flag"
+                                    :description "a flag"
+                                    :key :flag
+                                    :env-vars '("TEST_BOOL_FLAG"))))
+      (setf (uiop:getenv "TEST_BOOL_FLAG") "0")
+      (unwind-protect
+           (progn
+             (clingon:initialize-option opt)
+             (ok (equal :false (clingon:option-value opt)) "env var '0' derives to :false")
+             (ok (equal nil (clingon:finalize-option opt)) "finalizes to NIL without error"))
+        (setf (uiop:getenv "TEST_BOOL_FLAG") ""))))
+
+  (testing "counter option initialized from environment variable"
+    (let ((opt (clingon:make-option :counter
+                                    :long-name "verbose"
+                                    :description "verbosity"
+                                    :key :verbose
+                                    :env-vars '("TEST_COUNTER_VAR"))))
+      (setf (uiop:getenv "TEST_COUNTER_VAR") "3")
+      (unwind-protect
+           (progn
+             (clingon:initialize-option opt)
+             (ok (= 3 (clingon:option-value opt)) "env var parsed as integer")
+             (let ((derived (clingon:derive-option-value opt nil)))
+               (ok (= 4 derived) "derive increments from env var value without type error")))
+        (setf (uiop:getenv "TEST_COUNTER_VAR") ""))))
+
+  (testing "list/filepath option initialized from environment variable"
+    (let ((opt (clingon:make-option :list/filepath
+                                    :long-name "paths"
+                                    :description "paths"
+                                    :key :paths
+                                    :env-vars '("TEST_PATHS_VAR"))))
+      (setf (uiop:getenv "TEST_PATHS_VAR") "/foo,/bar")
+      (unwind-protect
+           (progn
+             (clingon:initialize-option opt)
+             (ok (every #'pathnamep (clingon:option-value opt))
+                 "env var items are pathnames, not strings")
+             (ok (= 2 (length (clingon:option-value opt)))
+                 "correct number of items parsed"))
+        (setf (uiop:getenv "TEST_PATHS_VAR") "")))))

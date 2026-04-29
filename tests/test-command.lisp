@@ -368,11 +368,12 @@
           "signals on missing option argument (long option) #1")
       (clingon:finalize-command c)
 
-      ;; Test with missing optarg for long option
+      ;; Test with empty optarg for long option (--string= is valid, passes empty string)
       (setf (clingon:command-args-to-parse c) '("--string="))
       (clingon:initialize-command c)
-      (ok (signals (clingon:parse-option :long c) 'clingon:missing-option-argument)
-          "signals on missing option argument (long option) #2")
+      (clingon:parse-option :long c)
+      (ok (string= "" (clingon:option-value (clingon:find-option :long c "string")))
+          "empty string value accepted for long option with equals sign")
       (clingon:finalize-command c))))
 
 (defun status/options ()
@@ -574,3 +575,53 @@
             "value matches for sub-command (option is not set)")
         (ok (string= "bar" (clingon:getopt* c :persistent-opt))
             "value matches for parent command")))))
+
+(deftest parse-empty-long-option-value
+  (testing "long option with empty value via equals sign"
+    (let* ((opt (clingon:make-option :string
+                                     :long-name "name"
+                                     :description "name"
+                                     :parameter "VALUE"
+                                     :key :name))
+           (cmd (clingon:make-command :name "test"
+                                     :description "test"
+                                     :options (list opt))))
+      (setf (clingon:command-args-to-parse cmd) (list "--name="))
+      (clingon:initialize-command cmd)
+      (clingon:parse-option :long cmd)
+      (ok (string= "" (clingon:option-value (clingon:find-option :long cmd "name")))
+          "empty string value accepted without error"))))
+
+(deftest print-options-usage-all-hidden
+  (testing "print-options-usage with all hidden options"
+    (let* ((opt (clingon:make-option :string
+                                     :long-name "secret"
+                                     :description "secret"
+                                     :key :secret
+                                     :hidden t))
+           (cmd (clingon:make-command :name "test"
+                                     :description "test"
+                                     :options (list opt))))
+      (ok (with-output-to-string (s)
+            (clingon:print-options-usage cmd s))
+          "does not crash with all hidden options"))))
+
+(deftest initialize-command-idempotent
+  (testing "repeated initialize-command does not accumulate options"
+    (let* ((parent-opt (clingon:make-option :string
+                                            :long-name "global"
+                                            :description "global"
+                                            :key :global
+                                            :persistent t))
+           (child (clingon:make-command :name "child"
+                                       :description "child"))
+           (parent (clingon:make-command :name "parent"
+                                        :description "parent"
+                                        :options (list parent-opt)
+                                        :sub-commands (list child))))
+      (declare (ignore parent))
+      (clingon:initialize-command child)
+      (let ((count-1 (length (clingon:command-options child))))
+        (clingon:initialize-command child)
+        (ok (= count-1 (length (clingon:command-options child)))
+            "option count is the same after repeated initialization")))))

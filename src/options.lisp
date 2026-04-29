@@ -349,9 +349,11 @@
   (unless (option-value option)
     (return-from initialize-option))
 
-  ;; Derive a new value based on the already set initialized value
+  ;; Derive a new value based on the already set initialized value,
+  ;; but only if it is still a raw string (e.g. from an env var).
   (let ((current (option-value option)))
-    (setf (option-value option) (derive-option-value option current))))
+    (when (stringp current)
+      (setf (option-value option) (derive-option-value option current)))))
 
 (defmethod derive-option-value ((option option-boolean) arg &key)
   (let ((arg (string-downcase arg)))
@@ -699,10 +701,11 @@
   (unless (option-value option)
     (return-from initialize-option))
 
-  ;; Derive a new value if we have an initial value
+  ;; Derive a new value if we have a raw string initial value
   (let ((current (option-value option)))
-    (setf (option-value option)
-          (derive-option-value option current))))
+    (when (stringp current)
+      (setf (option-value option)
+            (derive-option-value option current)))))
 
 (defmethod derive-option-value ((option option-switch) arg &key)
   (cond

@@ -75,4 +75,7 @@
         "joined string matches"))
   (testing "empty list"
     (ok (string= "" (clingon:join-list nil "."))
-        "joined string matches")))
+        "joined string matches"))
+  (testing "list with nil elements"
+    (ok (string= "a,NIL,b" (clingon:join-list '("a" nil "b") ","))
+        "nil elements do not terminate iteration")))
