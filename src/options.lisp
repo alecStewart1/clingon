@@ -498,6 +498,18 @@
 (defmethod make-option ((kind (eql :list/filepath)) &rest rest)
   (apply #'make-instance 'option-list-filepath rest))
 
+(defmethod initialize-option ((option option-list-filepath) &key)
+  ;; Set things up, including list splitting from env vars
+  (call-next-method)
+
+  ;; Nothing to be done further
+  (unless (option-value option)
+    (return-from initialize-option))
+
+  ;; Convert string items to pathnames
+  (setf (option-value option)
+        (mapcar #'pathname (option-value option))))
+
 (defmethod derive-option-value ((option option-list-filepath) arg &key)
   (cons (pathname arg) (option-value option)))
 
