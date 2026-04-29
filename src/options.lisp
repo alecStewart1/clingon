@@ -481,7 +481,7 @@
   (cons arg (option-value option)))
 
 (defmethod finalize-option ((option option-list) &key)
-  (setf (option-value option) (nreverse (option-value option))))
+  (setf (option-value option) (reverse (option-value option))))
 
 (defmethod option-usage-details ((kind (eql :zsh-option-spec)) (option option-list) &key)
   "List options may be repeated on the command-line"
