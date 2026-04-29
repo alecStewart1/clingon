@@ -357,6 +357,18 @@ _~~A() {
     :initform nil
     :accessor command-initial-options
     :documentation "The original options list, saved at creation time to allow resetting on re-initialization")
+   (short-options-lookup
+    :initform (make-hash-table)
+    :accessor command-short-options-lookup
+    :documentation "Hash table mapping short-name characters to options")
+   (long-options-lookup
+    :initform (make-hash-table :test #'equal)
+    :accessor command-long-options-lookup
+    :documentation "Hash table mapping long-name strings to options")
+   (key-options-lookup
+    :initform (make-hash-table)
+    :accessor command-key-options-lookup
+    :documentation "Hash table mapping option keys to options")
    (handler
     :initarg :handler
     :initform nil
@@ -460,6 +472,21 @@ _~~A() {
             (length (command-options command))
             (length (command-sub-commands command)))))
 
+(defun build-option-lookup-tables (command)
+  "Populates the option lookup hash tables for O(1) access during parsing"
+  (let ((short-table (command-short-options-lookup command))
+        (long-table (command-long-options-lookup command))
+        (key-table (command-key-options-lookup command)))
+    (clrhash short-table)
+    (clrhash long-table)
+    (clrhash key-table)
+    (dolist (option (command-options command))
+      (when (option-short-name option)
+        (setf (gethash (option-short-name option) short-table) option))
+      (when (option-long-name option)
+        (setf (gethash (option-long-name option) long-table) option))
+      (setf (gethash (option-key option) key-table) option))))
+
 (defmethod initialize-instance :after ((command command) &key)
   ;; Configure the parent for any of the sub-commands.
   (dolist (sub (command-sub-commands command))
@@ -478,7 +505,10 @@ _~~A() {
     (dolist (arg (command-named-arguments command))
       (when (member (argument-key arg) option-keys)
         (error "Argument key ~A conflicts with an option key in command '~A'"
-               (argument-key arg) (command-name command))))))
+               (argument-key arg) (command-name command)))))
+
+  ;; Build initial option lookup tables
+  (build-option-lookup-tables command))
 
 (defmethod initialize-command ((command command))
   "Initializes the command and the options associated with it."
@@ -507,6 +537,9 @@ _~~A() {
   ;; Initialize options
   (dolist (option (command-options command))
     (initialize-option option))
+
+  ;; Rebuild option lookup tables (options may have changed due to inheritance)
+  (build-option-lookup-tables command)
   t)
 
 (defmethod finalize-command ((command command))
@@ -561,17 +594,15 @@ _~~A() {
 
 (defmethod find-option ((kind (eql :short)) (command command) name)
   "Finds the option with the given short name"
-  (find name (command-options command)
-        :key (lambda (item) (or (option-short-name item) #\Nul))
-        :test #'char=))
+  (gethash name (command-short-options-lookup command)))
 
 (defmethod find-option ((kind (eql :long)) (command command) name)
   "Finds the option with the given long name"
-  (find name (command-options command) :key #'option-long-name :test #'string=))
+  (gethash name (command-long-options-lookup command)))
 
 (defmethod find-option ((kind (eql :by-key)) (command command) opt-key)
   "Finds the option identified by OPT-KEY"
-  (find opt-key (command-options command) :key #'option-key :test #'equal))
+  (gethash opt-key (command-key-options-lookup command)))
 
 (defmethod ensure-unique-options ((command command))
   "Ensures that the given COMMAND does not contain duplicate options"
