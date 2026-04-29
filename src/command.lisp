@@ -133,10 +133,10 @@
    :persistent-options
    :inherited-options
    :apply-hooks
-   :*default-help-flag*
-   :*default-version-flag*
-   :*default-bash-completions-flag*
-   :*default-options*))
+   :make-default-help-flag
+   :make-default-version-flag
+   :make-default-bash-completions-flag
+   :make-default-options))
 (in-package :clingon.command)
 
 (defgeneric handle-error (condition)
@@ -245,33 +245,33 @@ not found, or not set."))
   (:documentation "Prints a summary of the sub-commands available for
   the command"))
 
-(defparameter *default-help-flag*
+(defun make-default-help-flag ()
+  "Creates a new instance of the default `--help' flag"
   (make-option :flag
                :description "display usage information and exit"
                :long-name "help"
-               :key :clingon.help.flag)
-  "The default `--help' flag")
+               :key :clingon.help.flag))
 
-(defparameter *default-version-flag*
+(defun make-default-version-flag ()
+  "Creates a new instance of the default `--version' flag"
   (make-option :flag
                :description "display version and exit"
                :long-name "version"
-               :key :clingon.version.flag)
-  "The default `--version' flag")
+               :key :clingon.version.flag))
 
-(defparameter *default-bash-completions-flag*
+(defun make-default-bash-completions-flag ()
+  "Creates a new instance of the default `--bash-completions' flag"
   (make-option :flag
                :hidden t
                :description "generate bash completions"
                :long-name "bash-completions"
-               :key :clingon.bash-completions.flag)
-  "The default `--bash-completions' flag")
+               :key :clingon.bash-completions.flag))
 
-(defparameter *default-options*
-  (list *default-help-flag*
-        *default-version-flag*
-        *default-bash-completions-flag*)
-  "A list of default options to add to each sub-command")
+(defun make-default-options ()
+  "Creates a fresh list of default options to add to each sub-command"
+  (list (make-default-help-flag)
+        (make-default-version-flag)
+        (make-default-bash-completions-flag)))
 
 (defparameter *zsh-compfunc-with-sub-commands*
   (format nil "~
@@ -428,7 +428,7 @@ _~~A() {
     (setf (command-parent sub) command))
 
   ;; Add default options to each command
-  (dolist (default-opt *default-options*)
+  (dolist (default-opt (make-default-options))
     (push default-opt (command-options command))))
 
 (defmethod initialize-command ((command command))
