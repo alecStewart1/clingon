@@ -969,45 +969,49 @@ _~~A() {
 
 (defmethod print-options-usage ((command command) stream &key (wrap-at-width 70))
   "Prints the usage information about the options for the given command"
-  (let* ((opts (visible-options command))
-         (usages (mapcar (lambda (o) (option-usage-details :default o)) opts))
-         (width (+ 4 (apply #'max (mapcar #'length usages))))
-         (opt-groups (group-by opts #'option-category))
-         (group-names (sort (hashtable-keys opt-groups) #'string<)))
-    (loop :for group-name :in group-names
-          :for group-opts = (gethash group-name opt-groups)
-          :for sorted-opts = (sort group-opts
-                                   #'string<
-                                   :key (lambda (o) (option-usage-details :default o)))
-          :do
-             ;; Special case for the default option category/group
-             (when (string/= group-name "")
-               (format stream "~%~A:~&" group-name))
-             (loop :for opt :in sorted-opts :do
-               (let* ((usage (option-usage-details :default opt))
-                      (desc (option-description-details :default opt))
-                      (lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
-                 (format stream "  ~A" (option-usage-details :default opt))
-                 (format stream "~vA~A~&" (- width (length usage) 2) #\Space (first lines))
-                 (dolist (remaining (rest lines))
-                   (format stream "~vA~A~&" width #\Space remaining))))))
+  (let ((opts (visible-options command)))
+    (unless opts
+      (return-from print-options-usage))
+    (let* ((usages (mapcar (lambda (o) (option-usage-details :default o)) opts))
+           (width (+ 4 (apply #'max (mapcar #'length usages))))
+           (opt-groups (group-by opts #'option-category))
+           (group-names (sort (hashtable-keys opt-groups) #'string<)))
+      (loop :for group-name :in group-names
+            :for group-opts = (gethash group-name opt-groups)
+            :for sorted-opts = (sort group-opts
+                                     #'string<
+                                     :key (lambda (o) (option-usage-details :default o)))
+            :do
+               ;; Special case for the default option category/group
+               (when (string/= group-name "")
+                 (format stream "~%~A:~&" group-name))
+               (loop :for opt :in sorted-opts :do
+                 (let* ((usage (option-usage-details :default opt))
+                        (desc (option-description-details :default opt))
+                        (lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
+                   (format stream "  ~A" (option-usage-details :default opt))
+                   (format stream "~vA~A~&" (- width (length usage) 2) #\Space (first lines))
+                   (dolist (remaining (rest lines))
+                     (format stream "~vA~A~&" width #\Space remaining)))))))
   (format stream "~%"))
 
 (defmethod print-sub-commands-info ((command command) stream &key (wrap-at-width 70))
   "Prints a summary of the sub-commands available for the command"
-  (let* ((sub-commands (command-sub-commands command))
-         (names-with-aliases (mapcar (lambda (x)
-                                       (cons (command-name x) (command-aliases x)))
-                                     sub-commands))
-         (names (mapcar (lambda (x) (join-list x ", ")) names-with-aliases))
-         (descriptions (mapcar #'command-description sub-commands))
-         (width (+ 4 (apply #'max (mapcar #'length names)))))
-    (loop :for (name desc) :in (mapcar #'list names descriptions) :do
-      (let ((lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
-        (format stream "  ~A" name)
-        (format stream "~vA~A~&" (- width (length name) 2) #\Space (first lines))
-        (dolist (remaining (rest lines))
-          (format stream "~vA~A~&" width #\Space remaining)))))
+  (let ((sub-commands (command-sub-commands command)))
+    (unless sub-commands
+      (return-from print-sub-commands-info))
+    (let* ((names-with-aliases (mapcar (lambda (x)
+                                         (cons (command-name x) (command-aliases x)))
+                                       sub-commands))
+           (names (mapcar (lambda (x) (join-list x ", ")) names-with-aliases))
+           (descriptions (mapcar #'command-description sub-commands))
+           (width (+ 4 (apply #'max (mapcar #'length names)))))
+      (loop :for (name desc) :in (mapcar #'list names descriptions) :do
+        (let ((lines (split-sequence #\Newline (bobbin:wrap desc wrap-at-width))))
+          (format stream "  ~A" name)
+          (format stream "~vA~A~&" (- width (length name) 2) #\Space (first lines))
+          (dolist (remaining (rest lines))
+            (format stream "~vA~A~&" width #\Space remaining))))))
   (format stream "~%"))
 
 (defmethod command-usage-string ((command command))
