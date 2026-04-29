@@ -1,3 +1,49 @@
+* 2026-04-29
+
+Version =0.7.0= has been tagged.
+
+New features:
+
+- Added support for named positional arguments via =CLINGON:MAKE-ARGUMENT=.
+  Named positionals allow defining named positions for free arguments and
+  accessing them via =CLINGON:GETOPT=. See [[https://github.com/dnaeon/clingon/issues/19][issue #19]]
+- New =copy= sub-command added to the demo application showcasing named
+  positional arguments
+
+Bug fixes:
+
+- Fixed =PRINT-USAGE= leaking example code lines to stdout instead of the
+  specified stream. See [[https://github.com/dnaeon/clingon/commit/9fb2221][9fb2221]].
+- Fixed shared mutable default option instances leaking state between commands
+  on repeated parsing. See [[https://github.com/dnaeon/clingon/commit/f88c4e7][f88c4e7]].
+- Fixed inherited options accumulating on repeated =INITIALIZE-COMMAND= calls
+  during documentation generation. See [[https://github.com/dnaeon/clingon/commit/9f5fb87][9f5fb87]].
+- Fixed =OPTION-BOOLEAN= crashing on =FINALIZE-OPTION= when initialized from
+  environment variables. See [[https://github.com/dnaeon/clingon/commit/f787ce0][f787ce0]].
+- Fixed =OPTION-COUNTER= type error when initialized from environment
+  variables. See [[https://github.com/dnaeon/clingon/commit/0391d56][0391d56]].
+- Fixed =OPTION-LIST-FILEPATH= environment variable values not being converted
+  to pathnames. See [[https://github.com/dnaeon/clingon/commit/66858e3][66858e3]].
+- Fixed =--opt== (explicit empty value) being incorrectly treated as a missing
+  argument. See [[https://github.com/dnaeon/clingon/commit/f38d425][f38d425]].
+- Fixed =PRINT-OPTIONS-USAGE= crash when all options are hidden.
+  See [[https://github.com/dnaeon/clingon/commit/46c707a][46c707a]].
+- Fixed =JOIN-LIST= stopping early on NIL elements in the middle of a list.
+  See [[https://github.com/dnaeon/clingon/commit/f32abe7][f32abe7]].
+- Fixed =FINALIZE-OPTION= for list options breaking on double-finalization due
+  to destructive =NREVERSE=. See [[https://github.com/dnaeon/clingon/commit/1ad66c2][1ad66c2]].
+
+Performance improvements:
+
+- =FIND-OPTION= now uses O(1) hash table lookups instead of linear scans.
+  See [[https://github.com/dnaeon/clingon/commit/0d635b3][0d635b3]].
+- =FIND-SUB-COMMAND= now uses O(1) hash table lookups instead of linear scans.
+  See [[https://github.com/dnaeon/clingon/commit/30e973a][30e973a]].
+- =PRINT-OPTIONS-USAGE= reduced from multiple passes to a single pass over
+  options. See [[https://github.com/dnaeon/clingon/commit/73f5423][73f5423]].
+- =WALK= utility now uses a hash table for the visited set.
+  See [[https://github.com/dnaeon/clingon/commit/ec93e1a][ec93e1a]].
+
 * 2025-07-28
 
 Version =0.6.0= has been tagged.
