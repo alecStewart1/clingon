@@ -323,6 +323,10 @@ _~~A() {
     :initform nil
     :accessor command-options
     :documentation "Command options")
+   (initial-options
+    :initform nil
+    :accessor command-initial-options
+    :documentation "The original options list, saved at creation time to allow resetting on re-initialization")
    (handler
     :initarg :handler
     :initform nil
@@ -429,13 +433,21 @@ _~~A() {
 
   ;; Add default options to each command
   (dolist (default-opt (make-default-options))
-    (push default-opt (command-options command))))
+    (push default-opt (command-options command)))
+
+  ;; Save the initial options list for resetting on re-initialization
+  (setf (command-initial-options command)
+        (copy-list (command-options command))))
 
 (defmethod initialize-command ((command command))
   "Initializes the command and the options associated with it."
   ;; Re-initialize context and arguments
   (setf (command-context command) (make-hash-table :test #'equal))
   (setf (command-arguments command) nil)
+
+  ;; Reset options to the initial set to prevent accumulation on repeated calls
+  (setf (command-options command)
+        (copy-list (command-initial-options command)))
 
   ;; Inherit persistent options from parent commands
   (loop :with inherited-opts = (inherited-options command)
